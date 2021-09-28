@@ -15,7 +15,6 @@ from dataset import DialogDataset
 from dataset import DialogDataLoader
 # from generate import generate_responses
 
-
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - PID: %(process)d -  %(message)s",
     datefmt="%m/%d/%Y %H:%M:%S",
@@ -257,7 +256,7 @@ def train_epoch(
                     if (checkpoint_val_rank  != -1):
                         if args.validation_interval != args.checkpoint_interval:
                             output_dir = os.path.join(
-                                args.output_dir, f"{CHECKPOINT_PREFIX}-validation-{iters.global_step}")
+                                args.output_dir, f"checkpoint-validation-{iters.global_step}")
                             save_checkpoint(
                                 model=model,
                                 optimizer=optimizer,
@@ -314,26 +313,3 @@ def train_epoch(
         iters.epoch_step = 0
         iters.n_sequences_epoch = 0
         iters.total_loss_epoch = 0
-    
-    if args.is_master:
-        val_loss, val_ppl = validate(
-            model=model,
-            dataloader=val_dataloader,
-            iters=iters,
-            args=args
-        )
-        logging_client["val/loss"].log(val_loss)
-        logging_client["val/ppl"].log(val_ppl)
-
-        logger.info("Saving final checkpoint as `pytorch_model.bin`")
-        save_checkpoint(
-                    model=model,
-                    optimizer=optimizer,
-                    scheduler=scheduler,
-                    output_dir=args.output_dir,
-                    upload_to_bucket=args.upload_to_bucket,
-                    bucket=bucket,
-                    bucket_dir=args.bucket_dir,
-                    cleanup=args.cleanup
-                )        
-        logger.info("Training is finished")

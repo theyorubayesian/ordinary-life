@@ -16,7 +16,9 @@ from transformers import GPT2Tokenizer
 from transformers import GPT2LMHeadModel
 
 from train import prepare_training_data
+from train import save_checkpoint
 from train import train_epoch
+from train import validate
 from utils import init_gpu_params
 from utils import set_seed
 from utils import Iters
@@ -359,6 +361,29 @@ def main():
             logging_client=logging_client,
             bucket=bucket,
         )
+    
+    if args.is_master:
+        val_loss, val_ppl = validate(
+            model=model,
+            dataloader=val_dataloader,
+            iters=iters,
+            args=args
+        )
+        logging_client["val/loss"].log(val_loss)
+        logging_client["val/ppl"].log(val_ppl)
+
+        logger.info("Saving final checkpoint as `pytorch_model.bin`")
+        save_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            output_dir=args.output_dir,
+            upload_to_bucket=args.upload_to_bucket,
+            bucket=bucket,
+            bucket_dir=args.bucket_dir,
+            cleanup=args.cleanup
+        )        
+        logger.info("Training is finished")
 
 
 if __name__ == "__main__":
