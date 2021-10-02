@@ -138,10 +138,10 @@ def validate(
                 return_dict=True
             )
             loss = outputs.loss
-            ppl = exp(loss)
+            ppl = exp(loss.mean().item())
 
             tot_loss.append(loss.mean().item() * n_sample)
-            tot_ppl.append(ppl.mean().item() * n_sample)
+            tot_ppl.append(ppl * n_sample)
             tot_sample.append(n_sample)
     val_loss = np.sum(tot_loss) / np.sum(tot_sample)
     val_ppl = np.sum(tot_ppl) / np.sum(tot_sample)
@@ -172,7 +172,12 @@ def train_epoch(
     bucket,
     args
 ):
+    iters.epoch_step = 0
+    iters.n_sequences_epoch = 0
+    iters.total_loss_epoch = 0
+
     for batch in train_dataloader:
+        # TODO: Consider Gradient Accumulation Steps
         if iters.steps_trained_in_epoch > 0:
             iters.step_trained_in_epoch -= 1
             continue
@@ -205,12 +210,13 @@ def train_epoch(
         iters.last_loss = loss.item()
         iters.total_loss_epoch += loss.item()
         iters.step += 1
-        iters.epoch_step += 1
         iters.total_training_time += time.time() - iters.last_iter_time
         iters.last_iter_time = time.time()
         
         if iters.step % args.gradient_accumulation_steps == 0:
             iters.global_step += 1
+            iters.epoch_step += 1
+
             nn.utils.clip_grad_norm_(
                 model.parameters(), args.max_grad_norm
             )
@@ -219,7 +225,7 @@ def train_epoch(
             scheduler.step()
 
             if args.is_master:
-                log_neptune(logging_client, model, optimizer, iters, log_params=True)
+                log_neptune(logging_client, model, optimizer, iters, log_params=args.log_params)
                 iters.last_log = time.time()
             
             optimizer.zero_grad()
@@ -233,7 +239,7 @@ def train_epoch(
                         optimizer=optimizer,
                         scheduler=scheduler,
                         output_dir=output_dir,
-                        upload_to_bucket=args.upload_to_bucket,
+                        to_bucket=args.upload_to_bucket,
                         bucket=bucket,
                         bucket_dir=args.bucket_dir,
                         cleanup=args.cleanup
@@ -262,29 +268,32 @@ def train_epoch(
                                 optimizer=optimizer,
                                 scheduler=scheduler,
                                 output_dir=args.output_dir,
-                                upload_to_bucket=args.upload_to_bucket,
+                                to_bucket=args.upload_to_bucket,
                                 bucket=bucket,
                                 bucket_dir=args.bucket_dir,
                                 cleanup=args.cleanup
                             )
                         else:
+                            # shutil.move(output_dir, )
                             os.rename(output_dir, "-validation-".join(output_dir.split("-")))
 
         iters.n_sequences_epoch += input_ids.size(0)
     # iters.n_toten_total += input_ids.shape[0] * input_ids.shape[1]
     # iters.n_token_real += (input_ids != 0).sum().item()
 
+    print(f"Epoch: {iters.epoch} Epoch Step: {iters.epoch_step}")
+
     if args.is_master:
         logger.info(f"Ending epoch {iters.epoch}/{args.n_epochs-1}")
         output_dir = os.path.join(
-            args.output_dir, f"epoch_checkpoint-{iters.epoch}"
+            args.output_dir, f"epoch-checkpoint-{iters.epoch}"
         )
         save_checkpoint(
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
-            output_dir=args.output_dir,
-            upload_to_bucket=args.upload_to_bucket,
+            output_dir=output_dir,
+            to_bucket=args.upload_to_bucket,
             bucket=bucket,
             bucket_dir=args.bucket_dir,
             cleanup=args.cleanup
@@ -308,8 +317,3 @@ def train_epoch(
             
             # model.train()
             pass
-        
-        iters.epoch += 1
-        iters.epoch_step = 0
-        iters.n_sequences_epoch = 0
-        iters.total_loss_epoch = 0

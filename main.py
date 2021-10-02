@@ -44,7 +44,7 @@ def get_model_and_tokenizer(args):
     config = GPT2Config.from_pretrained(
         args.config_name,
         cache_dir=args.cache_dir,
-        output_hidden_states=args.output_hidden_states
+        output_hidden_states=False
     )
     model = GPT2LMHeadModel.from_pretrained(
         args.model_name_or_path,
@@ -104,6 +104,14 @@ def get_parser():
     # Modelling
     # ---------
     parser.add_argument(
+        "--output_dir",
+        default="outputs"
+    )
+    parser.add_argument(
+        "--seed",
+        default=42
+    )
+    parser.add_argument(
         "--fp16",
         action="store_true"
     )
@@ -126,6 +134,12 @@ def get_parser():
         "--val_batch_size",
         default=8,
         type=int
+    )
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        default=1,
+        type=int,
+        help="" # TODO
     )
     parser.add_argument(
         "--n_epochs",
@@ -162,15 +176,14 @@ def get_parser():
         default=0.01,
         type=float
     )
-    parser.add_argument(
-        "--gradient_accumulation_steps",
-        default=1,
-        help="" # TODO
-    )
 
     # -----------------------
     # Validation & Checkpoint
     # -----------------------
+    parser.add_argument(
+        "--log_params",
+        action="store_true"
+    )
     parser.add_argument(
         "--checkpoint_interval",
         default=5000,
@@ -234,6 +247,8 @@ def main():
     args.device = torch.device(f"cuda:{args.local_rank}" if args.n_gpu else "cpu")
 
     model, tokenizer = get_model_and_tokenizer(args)
+    model.to(args.device)
+
     train_dataloader, val_dataloader = prepare_training_data(args, tokenizer)
 
     if args.num_training_steps:
@@ -246,7 +261,7 @@ def main():
     # Logging & Storage
     # -----------------
     logging_client = None
-    storage_client = None
+    bucket=None
 
     if args.is_master:
         logging_client = neptune.init(
@@ -259,11 +274,12 @@ def main():
         for a in args_copy:
             logging_client[a] = args_copy[a]
             logger.info(f"{a}:  {args_copy[a]}")
-
-        storage_client = storage.Client()
-        bucket = storage_client.get_bucket(
-            os.getenv("GOOGLE_CLOUD_BUCKET_NAME")
-        )
+        
+        if args.upload_to_bucket:
+            storage_client = storage.Client()
+            bucket = storage_client.get_bucket(
+                os.getenv("GOOGLE_CLOUD_BUCKET_NAME")
+            )
     
     # --------
     # Trackers
@@ -350,17 +366,20 @@ def main():
     while iters.epoch < args.n_epochs:
         if args.multi_gpu:
             torch.distributed.barrier()
-
+        
         train_epoch(
             train_dataloader=train_dataloader,
             val_dataloader=val_dataloader,
             model=model,
             tokenizer=tokenizer,
             optimizer=optimizer,
+            scheduler=scheduler,
             iters=iters,
             logging_client=logging_client,
             bucket=bucket,
+            args=args
         )
+        iters.epoch += 1
     
     if args.is_master:
         val_loss, val_ppl = validate(
@@ -378,7 +397,7 @@ def main():
             optimizer=optimizer,
             scheduler=scheduler,
             output_dir=args.output_dir,
-            upload_to_bucket=args.upload_to_bucket,
+            to_bucket=args.upload_to_bucket,
             bucket=bucket,
             bucket_dir=args.bucket_dir,
             cleanup=args.cleanup
