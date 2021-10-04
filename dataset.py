@@ -152,8 +152,8 @@ class BucketSampler(Sampler):
 
     def __len__(self):
         bucket_sizes = (
-            [self._bucket_size] * (len(self._lengths) // self._bucket_size) + 
-            (len(self._lengths % self._bucket_size))
+            [self._bucket_size] * (len(self._lengths) // self._bucket_size) 
+            + [len(self._lengths) % self._bucket_size]
         )
         if self._droplast:
             return sum(s // self._batch_size for s in bucket_sizes)
@@ -191,7 +191,7 @@ class DialogDataLoader:
         )
     
     def __len__(self):
-        return len(self.bucket)
+        return len(self.sampler)
     
     def __iter__(self):
         loader = DataLoader(
