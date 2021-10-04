@@ -1,12 +1,16 @@
 import logging
+import math
 import os
 import pickle
+import random
 from copy import deepcopy
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torchtext.data.iterator import BucketIterator
+from torch.utils.data import Sampler
+
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - PID: %(process)d -  %(message)s",
@@ -65,10 +69,11 @@ class DialogDataset(Dataset):
             self.remove_short_sentences(args)
             self.labels = deepcopy(self.data)
             self.pad_to_multiple_of_eight()
+            self.lengths = [len(x) for x in self.data]
 
             with open(cached_features_file, "wb") as f:
                 pickle.dump(
-                    {"data": self.data, "labels": self.labels}, 
+                    {"data": self.data, "labels": self.labels, "lengths": self.lengths}, 
                     f, protocol=pickle.HIGHEST_PROTOCOL
                 )
     
@@ -76,7 +81,7 @@ class DialogDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        return {"input": self.data[idx], "label": self.labels[idx]}
+        return {"input": self.data[idx], "label": self.labels[idx], "length": self.lengths[idx]}
 
     @staticmethod
     def make_chunks(full_conv, chunk_size):
@@ -94,38 +99,104 @@ class DialogDataset(Dataset):
                 label.append(-100)
             assert len(data) == len(label)
 
+    @staticmethod
+    def collate(features):
+        input_ids = pad_sequence(
+            [torch.tensor(x["input"], dtype=torch.long) for x in features],
+            batch_first=True,
+            padding_value=0
+        )
+        labels = pad_sequence(
+            [torch.tensor(x["label"], dtype=torch.long) for x in features],
+            batch_first=True,
+            padding_value=-100
+        )
+        return (input_ids, labels)
+
+
+class BucketSampler(Sampler):
+    """
+    See microsoft/DialoGPT
+    https://github.com/microsoft/DialoGPT/blob/master/data_loader.py
+    """
+    def __init__(self, batch_size, bucket_size, lengths, droplast=False, shuffle=True):
+        self._lengths=lengths
+        self._bucket_size=bucket_size
+        self._batch_size=batch_size
+        self._droplast=droplast
+        self._shuffle = shuffle
+
+    def __iter__(self):
+        ids = list(range(len(self._lengths)))
+
+        if self._shuffle:
+            random.shuffle(ids)
+
+        buckets = [
+            sorted(ids[i:i+self._bucket_size], key=lambda i: self._lengths[i], reverse=True)
+            for i in range(0, len(ids), self._bucket_size)
+        ]
+        batches = [
+            bucket[i:i+self._batch_size] 
+            for bucket in buckets 
+            for i in range(0, len(bucket), self._batch_size)
+        ]
+
+        if self._droplast:
+            batches = [batch for batch in batches if len(batch) == self._batch_size]
+        
+        if self._shuffle:
+            random.shuffle(batches)
+        
+        return iter(batches)
+
+    def __len__(self):
+        bucket_sizes = (
+            [self._bucket_size] * (len(self._lengths) // self._bucket_size) + 
+            (len(self._lengths % self._bucket_size))
+        )
+        if self._droplast:
+            return sum(s // self._batch_size for s in bucket_sizes)
+        else:
+            return sum(math.ceil(s/self._batch_size) for s in bucket_sizes)
+
 
 class DialogDataLoader:
-    def __init__(self, data, batch_size, dtype, repeat, shuffle, sort, sort_within_batch, args):
+    def __init__(
+        self, 
+        data,
+        split_name,
+        batch_size,
+        dtype,
+        tokenizer,
+        args,
+        bucket=100,
+        shuffle=True
+    ):
+        self.data = data
         self.dtype = dtype
         self.batch_size = batch_size
-        self.bucket = BucketIterator(
-            data,
-            batch_size=batch_size,
-            device=args.device,
-            sort_key=lambda x: len(x["input"]),
-            repeat=repeat,
-            shuffle=shuffle,
-            sort=sort,
-            sort_within_batch=sort_within_batch
+        self.bucket_size = bucket * batch_size
+        self.shuffle=shuffle
+
+        self.dataset = DialogDataset(
+            tokenizer, data, split_name, args
         )
-        self.bucket.create_batches()
+        self.sampler = BucketSampler(
+            batch_size, 
+            self.bucket_size, 
+            self.dataset.lengths, 
+            droplast=True, 
+            shuffle=self.shuffle
+        )
     
     def __len__(self):
         return len(self.bucket)
     
     def __iter__(self):
-        for batch in self.bucket.batches:
-            if len(batch) < self.batch_size:
-                continue
-            input_ids = pad_sequence(
-                [torch.tensor(x["input"], dtype=self.dtype) for x in batch],
-                batch_first=True,
-                padding_value=0
-            )
-            labels = pad_sequence(
-                [torch.tensor(x["label"], dtype=self.dtype) for x in batch],
-                batch_first=True,
-                padding_value=-100
-            )
-            yield input_ids, labels
+        loader = DataLoader(
+            self.dataset,
+            batch_sampler=self.sampler,
+            collate_fn=DialogDataset.collate
+        )
+        yield from loader

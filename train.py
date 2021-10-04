@@ -26,33 +26,18 @@ logger = logging.getLogger(__name__)
 def prepare_training_data(args, tokenizer):
     data = load_dataset(args.dataset_name)
     train, val = data["train"], data["validation"]
-    train_data = DialogDataset(tokenizer, train["dialog"], "train", args)
-    val_data = DialogDataset(tokenizer, val["dialog"], "val", args)
+    # train_data = DialogDataset(tokenizer, train["dialog"], "train", args)
+    # val_data = DialogDataset(tokenizer, val["dialog"], "val", args)
 
     # train_dataloader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True)
     # val_dataloader = DataLoader(val_data, args.val_batch_size, shuffle=False)
-
     train_dataloader = DialogDataLoader(
-        data=train_data,
-        batch_size=args.train_batch_size,
-        dtype=torch.long,
-        repeat=True,
-        shuffle=True,
-        sort=False,
-        sort_within_batch=True,
-        args=args
+        train["dialog"], "train", args.train_batch_size, torch.long, tokenizer, args
     )
     val_dataloader = DialogDataLoader(
-        data=val_data,
-        batch_size=args.val_batch_size,
-        dtype=torch.long,
-        repeat=True,
-        shuffle=True,
-        sort=False,
-        sort_within_batch=True,
-        args=args
+        val["dialog"], "val", args.val_batch_size, torch.long, tokenizer, args
     )
-
+    
     return train_dataloader, val_dataloader
 
 
