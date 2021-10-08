@@ -164,31 +164,15 @@ class BucketSampler(Sampler):
 class DialogDataLoader:
     def __init__(
         self, 
-        data,
-        split_name,
-        batch_size,
-        dtype,
-        tokenizer,
-        args,
-        bucket=100,
-        shuffle=True
+        dataset,
+        sampler,
+        num_workers,
+        pin_memory
     ):
-        self.data = data
-        self.dtype = dtype
-        self.batch_size = batch_size
-        self.bucket_size = bucket * batch_size
-        self.shuffle=shuffle
-
-        self.dataset = DialogDataset(
-            tokenizer, data, split_name, args
-        )
-        self.sampler = BucketSampler(
-            batch_size, 
-            self.bucket_size, 
-            self.dataset.lengths, 
-            droplast=True, 
-            shuffle=self.shuffle
-        )
+        self.dataset = dataset
+        self.sampler = sampler
+        self.num_workers=num_workers
+        self.pin_memory=pin_memory
     
     def __len__(self):
         return len(self.sampler)
@@ -197,6 +181,8 @@ class DialogDataLoader:
         loader = DataLoader(
             self.dataset,
             batch_sampler=self.sampler,
-            collate_fn=DialogDataset.collate
+            collate_fn=DialogDataset.collate,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory
         )
         yield from loader
