@@ -169,10 +169,11 @@ def train_epoch(
 
         if args.n_gpu > 0:
             batch = tuple(t.to(args.device) for t in batch)
-        input_ids, label_ids  = batch
+        input_ids, attn_mask, label_ids  = batch
 
         outputs = model(
             input_ids=input_ids,
+            attention_masks=attn_mask,
             labels=label_ids,
             return_dict=True
         )
