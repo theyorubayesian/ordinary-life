@@ -38,6 +38,7 @@ class DialogDataset(Dataset):
         cached_features_file = os.path.join(
             args.cache_dir, f"cached_dataset_{split_name}"
         )
+
         if os.path.exists(cached_features_file) and not args.overwrite_cache:
             logger.info(f"Loading features from cached file: {cached_features_file}")
             with open(cached_features_file, "rb") as f:
@@ -68,8 +69,8 @@ class DialogDataset(Dataset):
                     self.data.extend(sub_convs)
             self.remove_short_sentences(args)
             self.labels = deepcopy(self.data)
-            self.pad_to_multiple_of_eight()
             self.lengths = [len(x) for x in self.data]
+            self.pad_to_multiple_of_eight()
 
             with open(cached_features_file, "wb") as f:
                 pickle.dump(
@@ -111,7 +112,10 @@ class DialogDataset(Dataset):
             batch_first=True,
             padding_value=-100
         )
-        return (input_ids, labels)
+        lengths = torch.tensor([x["length"] for x in features])
+        attn_mask = torch.arange(input_ids.size(1), dtype=torch.long, device=lengths.device) < lengths[:, None]
+        
+        return input_ids, attn_mask, labels
 
 
 class BucketSampler(Sampler):
