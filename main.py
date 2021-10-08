@@ -352,7 +352,7 @@ def main():
         except ImportError:
             raise ImportError("Please install apex: https://www.github.com/nvidia/apex"
             " for fp16 training")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_op_level)
+        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
     
     # --------
     # Training
