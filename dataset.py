@@ -111,7 +111,13 @@ class DialogDataset(Dataset):
             batch_first=True,
             padding_value=-100
         )
-        return (input_ids, labels)
+        lengths = torch.tensor([x["length"] for x in features])
+        attn_mask = torch.arange(input_ids.size(1), dtype=torch.long, device=lengths.device) < lengths[:, None]
+        return {
+            "input_ids": input_ids,
+            "labels": labels,
+            "attention_mask": attn_mask 
+        }
 
 
 class BucketSampler(Sampler):

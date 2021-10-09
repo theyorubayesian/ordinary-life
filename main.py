@@ -1,13 +1,8 @@
 import argparse
 import json
 import logging
-import os
-import time
-from math import ceil
 
 import torch
-import neptune.new as neptune
-from dotenv import load_dotenv
 from transformers import GPT2Config
 from transformers import GPT2Tokenizer
 from transformers import GPT2LMHeadModel
@@ -17,7 +12,6 @@ from trainer import DailyDialogTrainer as Trainer
 from trainer import CustomTrainingArguments as TrainingArguments
 from utils import init_gpu_params
 from utils import set_seed
-from utils import Iters
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - PID: %(process)d -  %(message)s",
@@ -25,8 +19,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
-
-load_dotenv()
 
 
 def get_model_and_tokenizer(args):
@@ -100,6 +92,37 @@ def get_parser():
     # Modelling
     # ---------
     parser.add_argument(
+        "--do_train",
+        action="store_true",
+        help="Whether to run training or not"
+    )
+    parser.add_argument(
+        "--do_eval",
+        action="store_true",
+        help="Whether to run evaluation on validation set or not"
+    )
+    parser.add_argument(
+        "--evaluation_strategy",
+        default="steps",
+        help="One of no|steps|epoch"
+    )
+    parser.add_argument(
+        "--logging_dir",
+        default="logs"
+    )
+    parser.add_argument(
+        "--logging_strategy",
+        default="steps"
+    )
+    parser.add_argument(
+        "--logging_steps",
+        tupe=int,
+        help="Number of update steps between logs"
+    )
+    parser.add_argument(
+        "--save_strategy"
+    )
+    parser.add_argument(
         "--output_dir",
         default="outputs"
     )
@@ -122,12 +145,12 @@ def get_parser():
         help="Step at which training should begin"
     )
     parser.add_argument(
-        "--train_batch_size",
+        "--per_device_train_batch_size",
         default=8,
         type=int
     )
     parser.add_argument(
-        "--val_batch_size",
+        "--per_device_eval_batch_size",
         default=8,
         type=int
     )
@@ -157,6 +180,11 @@ def get_parser():
         "--learning_rate",
         type=float,
         default=1e-5
+    )
+    parser.add_argument(
+        "--lr_scheduler_type",
+        type=str,
+        help=
     )
     parser.add_argument(
         "--adam_epsilon",
@@ -246,12 +274,15 @@ def main():
 
     train_dataset, val_dataset = prepare_training_data(args, tokenizer)
 
+    # TODO: Include no_cuda argument 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         report_to="neptune",
         sampler_bucket_size=100,
         dataloader_drop_last=True,
         dataloader_shuffle=True,
+        # dataloader_pin_memory=False,
+        # dataloader_num_workers=1,
         shuffle=True,
         num_train_epochs=args.n_epochs,
         per_device_train_batch_size=args.train_batch_size,

@@ -8,10 +8,9 @@ from transformers import DataCollator
 from transformers import Trainer
 from transformers import TrainingArguments
 
+from dataset import BucketSampler
 from dataset import DialogDataLoader
 # from generate import generate_responses
-
-from dataset import BucketSampler
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - PID: %(process)d -  %(message)s",
@@ -73,6 +72,9 @@ class CustomTrainingArguments(TrainingArguments):
 
 
 class Collator(DataCollator):
+    """
+    This is currently not in use. 
+    """
     def collate_batch(self, features):
         input_ids = pad_sequence(
             [torch.tensor(x["input"], dtype=torch.long) for x in features],
