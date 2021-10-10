@@ -28,10 +28,10 @@ class DailyDialogTrainer(Trainer):
         train_dataset = self.train_dataset
         train_sampler = BucketSampler(
             batch_size=self.args.per_device_train_batch_size,
-            bucket_size=self.args.bucket_size,  # TODO
+            bucket_size=self.args.sampler_bucket_size,  # TODO
             lengths=train_dataset.lengths,
             droplast=self.args.dataloader_drop_last,
-            shuffle=self.args.shuffle   # TODO
+            shuffle=self.args.dataloader_shuffle   # TODO
         )
 
         return DialogDataLoader(
@@ -48,10 +48,10 @@ class DailyDialogTrainer(Trainer):
 
         eval_sampler = BucketSampler(
             batch_size=self.args.per_device_train_batch_size,
-            bucket_size=self.args.bucket_size,  # TODO
+            bucket_size=self.args.sampler_bucket_size,  # TODO
             lengths=eval_dataset.lengths,
             droplast=self.args.dataloader_drop_last,
-            shuffle=self.args.shuffle   # TODO
+            shuffle=self.args.dataloader_shuffle   # TODO
         )
 
         return DialogDataLoader(
@@ -61,20 +61,20 @@ class DailyDialogTrainer(Trainer):
             pin_memory=self.args.dataloader_pin_memory,
         )
 
-
+@dataclass
 class CustomTrainingArguments(TrainingArguments):
     sampler_bucket_size: int = field(
-        default=100, metadata={"help": "Size of bucket used in dataloader sampler"}
+        default=100, init=True, metadata={"help": "Size of bucket used in dataloader sampler"}
     )
     dataloader_shuffle: bool = field(
-        default=True, metadata={"help": "Shuffle indices and batches in dataloader sampler"}
+        default=True, init=True, metadata={"help": "Shuffle indices and batches in dataloader sampler"}
     )
 
-
+"""
 class Collator(DataCollator):
-    """
-    This is currently not in use. 
-    """
+
+    # This is currently not in use. 
+
     def collate_batch(self, features):
         input_ids = pad_sequence(
             [torch.tensor(x["input"], dtype=torch.long) for x in features],
@@ -94,3 +94,4 @@ class Collator(DataCollator):
             "label_ids": labels,
             "attention_mask": attn_mask
         }
+"""

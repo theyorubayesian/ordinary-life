@@ -1,8 +1,5 @@
 import logging
-import os
-import shutil
 import time
-from bisect import bisect_left
 from math import exp
 
 import numpy as np
@@ -20,15 +17,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def prepare_training_data(args, tokenizer):
+def prepare_training_data(tokenizer, args):
     data = load_dataset(args.dataset_name)
     train, val = data["train"], data["validation"]
 
     train_dataset = DialogDataset(
-        tokenizer, train["dialog"], "train", args.train_batch_size, args
+        tokenizer, train["dialog"], "train", args
     )
     val_dataset = DialogDataset(
-        tokenizer, val["dialog"], "val", args.val_batch_size, args
+        tokenizer, val["dialog"], "val", args
     )
     
     return train_dataset, val_dataset

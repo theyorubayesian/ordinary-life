@@ -1,7 +1,7 @@
 import json
 import logging
 
-import torch
+from dotenv import load_dotenv
 from transformers import GPT2Config
 from transformers import GPT2Tokenizer
 from transformers import GPT2LMHeadModel
@@ -10,8 +10,6 @@ from transformers import HfArgumentParser
 from train import prepare_training_data
 from trainer import DailyDialogTrainer as Trainer
 from trainer import CustomTrainingArguments as TrainingArguments
-from utils import init_gpu_params
-from utils import set_seed
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - PID: %(process)d -  %(message)s",
@@ -45,7 +43,6 @@ def get_model_and_tokenizer(args):
 
 
 def get_parser():
-    # parser = argparse.ArgumentParser()
     parser = HfArgumentParser(TrainingArguments)
     # -----------------
     # Model & Tokenizer
@@ -68,7 +65,9 @@ def get_parser():
     # Data
     # ----
     parser.add_argument(
-        "--dataset_name"
+        "--dataset_name",
+        type=str,
+        default="daily_log"
     )
     parser.add_argument(
         "--max_seq_len",
@@ -81,11 +80,14 @@ def get_parser():
         type=int
     )
     parser.add_argument(
-        "--overwrite_cache",
-        action="store_true"
+        "--overwrite_data_cache",
+        action="store_true",
+        help="Overwrite data cache"
     )
     parser.add_argument(
-        "--cache_dir"
+        "--cache_dir",
+        type=str,
+        default="cache"
     )
 
     # -----------------------
@@ -117,50 +119,22 @@ def main():
     # --------------
     # Initialization
     # --------------
+    load_dotenv()
     training_args, init_args = get_parser()
     # TODO
     # run_sanity_check(args)
-    # init_gpu_params(args) # TODO
-    # set_seed(args)    # TODO
-    training_args.device = torch.device(f"cuda:{training_args.local_rank}" if training_args.n_gpu else "cpu")
-
     model, tokenizer = get_model_and_tokenizer(init_args)
-
-    train_dataset, val_dataset = prepare_training_data(init_args, tokenizer)
-
-    # TODO: Include no_cuda argument 
-    # training_args = TrainingArguments(
-    #    output_dir=args.output_dir,
-    #    report_to="neptune",
-    #    sampler_bucket_size=100,
-    #    dataloader_drop_last=True,
-    #    dataloader_shuffle=True,
-    #    # dataloader_pin_memory=False,
-    #    # dataloader_num_workers=1,
-    #    shuffle=True,
-    #    num_train_epochs=args.n_epochs,
-    #    per_device_train_batch_size=args.train_batch_size,
-    #    per_device_eval_batch_size=args.val_batch_size,
-    #    evaluation_strategy="epoch",
-    #    fp16=args.fp16,
-    #    fp16_opt_level=args.fp16_opt_level,
-    #    warmup_steps=args.warmup_steps,
-    #    learning_rate=args.learning_rate,
-    #    lr_scheduler_type=args.lr_scheduler_type,
-    #    adam_epsilon=args.adam_epsilon,
-    #    weight_decay=args.weight_decay,
-    #    save_total_limit=3, # TODO
-    #    load_best_model_at_end=True # TODO
-    # )
+    train_dataset, eval_dataset = prepare_training_data(tokenizer, init_args)
 
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=eval_dataset,
     )
 
     trainer.train()
+
 
 if __name__ == "__main__":
     main()

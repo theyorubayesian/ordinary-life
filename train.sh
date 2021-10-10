@@ -3,15 +3,13 @@ python main.py \
 --config_name gpt2 \
 --tokenizer_name gpt2 \
 --dataset_name daily_dialog \
---overwrite_cache \
---cache_dir cache/ \
---train_batch_size 8 \
---val_batch_size 8 \
+--cache_dir cache \
+--output_dir output \
+--per_gpu_train_batch_size 8 \
+--per_gpu_eval_batch_size 8 \
+--evaluation_strategy epoch \
 --gradient_accumulation_steps 2 \
---n_epochs 5 \
---num_training_steps 5000 \
+--fp16 False \
+--num_train_epochs 5 \
 --warmup_steps 2000 \
---learning_rate 5e-5 \
---checkpoint_interval 1000 \
---validation_interval 1000 \
---n_gpu 1 
+--report_to neptune
