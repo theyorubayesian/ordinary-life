@@ -5,3 +5,4 @@ cache/
 .env
 .neptune/
 outputs/
+output/
