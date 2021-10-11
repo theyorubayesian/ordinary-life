@@ -38,12 +38,13 @@ class DialogDataset(Dataset):
         cached_features_file = os.path.join(
             args.cache_dir, f"cached_dataset_{split_name}"
         )
-        if os.path.exists(cached_features_file) and not args.overwrite_cache:
+        if os.path.exists(cached_features_file) and not args.overwrite_data_cache:
             logger.info(f"Loading features from cached file: {cached_features_file}")
             with open(cached_features_file, "rb") as f:
                 cache = pickle.load(f)
                 self.data = cache["data"]
                 self.labels = cache["labels"]
+                self.lengths = cache["lengths"]
         else:
             logger.info(f"Creating features from data. Dataset will be cached to {cached_features_file}")
 
@@ -68,8 +69,8 @@ class DialogDataset(Dataset):
                     self.data.extend(sub_convs)
             self.remove_short_sentences(args)
             self.labels = deepcopy(self.data)
-            self.pad_to_multiple_of_eight()
             self.lengths = [len(x) for x in self.data]
+            self.pad_to_multiple_of_eight()
 
             with open(cached_features_file, "wb") as f:
                 pickle.dump(
@@ -177,6 +178,8 @@ class DialogDataLoader:
     ):
         self.dataset = dataset
         self.sampler = sampler
+        # Trainer evaluation loop requires batch size 
+        self.batch_size = sampler._batch_size   
         self.num_workers=num_workers
         self.pin_memory=pin_memory
     

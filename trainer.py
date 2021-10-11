@@ -2,9 +2,6 @@ import logging
 from dataclasses import dataclass
 from dataclasses import field
 
-import torch
-from torch.nn.utils.rnn import pad_sequence
-from transformers import DataCollator
 from transformers import Trainer
 from transformers import TrainingArguments
 
@@ -69,29 +66,3 @@ class CustomTrainingArguments(TrainingArguments):
     dataloader_shuffle: bool = field(
         default=True, init=True, metadata={"help": "Shuffle indices and batches in dataloader sampler"}
     )
-
-"""
-class Collator(DataCollator):
-
-    # This is currently not in use. 
-
-    def collate_batch(self, features):
-        input_ids = pad_sequence(
-            [torch.tensor(x["input"], dtype=torch.long) for x in features],
-            batch_first=True,
-            padding_value=0
-        )
-        labels = pad_sequence(
-            [torch.tensor(x["label"], dtype=torch.long) for x in features],
-            batch_first=True,
-            padding_value=-100
-        )
-        lengths = torch.tensor([x["length"] for x in features])
-        attn_mask = torch.arange(input_ids.size(1), dtype=torch.long, device=lengths.device) < lengths[:, None]
-        
-        return {
-            "input_ids": input_ids,
-            "label_ids": labels,
-            "attention_mask": attn_mask
-        }
-"""
